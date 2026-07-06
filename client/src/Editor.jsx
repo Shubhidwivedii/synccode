@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import MonacoEditor from "@monaco-editor/react";
 
-const SERVER_URL = "http://localhost:3001";
+const SERVER_URL = "https://synccode-server-ihdh.onrender.com";
 const LANGUAGES = ["javascript","python","java","cpp","typescript","html","css","rust"];
 
 export default function Editor({ roomId }) {
