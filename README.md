@@ -1,269 +1,297 @@
 # SyncCode
-### Real-Time Collaborative Code Editor
 
-SyncCode is a full-stack real-time collaborative code editor built on WebSockets and Monaco — the same editor engine that powers VS Code. Share a room link with anyone, and multiple developers can write, edit, and review code simultaneously with zero latency and no login required.
+**A real-time collaborative code editor with authenticated rooms, persistent multi-file workspaces, and live editing.**
 
----
+SyncCode is a full-stack collaboration platform for developers who want to write, review, and share code together in real time. It combines a VS Code-like Monaco editor, Socket.IO-powered live synchronization, JWT authentication, MongoDB persistence, room history, and folder-based multi-file workspaces.
 
 ## Live Demo
 
-**Frontend:** https://synccode-xi.vercel.app  
-**Backend:** https://synccode-server-ihdh.onrender.com
+- Frontend: https://synccode-xi.vercel.app
+- Backend: https://synccode-server-ihdh.onrender.com
+- Backend health: https://synccode-server-ihdh.onrender.com/api/health
 
-> Hosted on Render free tier — the backend may take 30–60 seconds to wake up after inactivity. Once active, all real-time features work at full speed.
+> The backend is hosted on Render. If the free-tier service is asleep, the first request can take a little while to wake up.
 
----
+## Why SyncCode
 
-## Table of Contents
+Screen sharing is not enough for collaborative coding. Only one person can type comfortably, code is not saved as a shared workspace, and switching files is clumsy.
 
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Real-Time Engine](#real-time-engine)
-- [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Running the Application](#running-the-application)
-- [API & Socket Events](#api--socket-events)
-- [Supported Languages](#supported-languages)
-- [Known Limitations](#known-limitations)
-- [Roadmap](#roadmap)
+SyncCode gives every collaborator their own live editor connected to the same room. Users can create rooms, open past rooms, create folders and files, switch between files, and keep work saved in MongoDB.
 
----
+## Features
 
-## Overview
+- **Real-time collaborative editing** using Socket.IO rooms
+- **Monaco Editor** for a familiar VS Code-like editing experience
+- **JWT authentication** for signup, login, and protected workspace access
+- **Google sign-in ready** through Google Identity Services
+- **Persistent MongoDB storage** for rooms, folders, files, language, and code
+- **Multi-file workspaces** with folder support inside each room
+- **Past rooms** list for each authenticated user
+- **Live user presence** showing how many users are online in a room
+- **Language selection** for syntax highlighting
+- **Manual save** plus automatic real-time persistence
+- **Winston logging** for production-ready server logs
+- **Deployment-ready frontend/backend** for Vercel and Render
 
-Pair programming and real-time code review are painful over screen share — latency, one-sided control, and no shared state. SyncCode solves this by giving every participant a live, synchronized editor instance backed by a single source of truth on the server.
+## Product Flow
 
-The core question SyncCode answers is:
-
-> *What if multiple developers could edit the same file at the same time, from anywhere, with no setup?*
-
-SyncCode does not require accounts, installs, or configuration. Open a link and start coding.
-
----
-
-## Architecture
-
-```
-User A (Browser)              User B (Browser)
-     |                              |
-     | WebSocket                    | WebSocket
-     v                              v
-  Backend (Node.js + Socket.io)
-     |
-     +-- rooms Map (in-memory state per room)
-     |     key = roomId
-     |     value = { code, language }
-     |
-     +-- Socket Events:
-           join-room      -> load current document state
-           code-change    -> broadcast to all other room members
-           language-change -> sync language across room
-           disconnect     -> update live user count
-     |
-     v
-  Broadcast to all room members (except sender)
-     |
-     v
-  Monaco Editor updates in real time on all clients
-```
-
-The backend is a stateless WebSocket server. Each room's state lives in memory for the duration of the session. No database writes occur on every keystroke — only the latest document state is retained per room.
-
----
-
-## Real-Time Engine
-
-### Room System
-Every collaborative session is identified by a unique 6-character alphanumeric room ID generated on the frontend. The room ID is embedded in the URL (`/room/:id`), making any session instantly shareable via a link copy.
-
-### WebSocket Sync
-SyncCode uses Socket.io over WebSocket for bidirectional real-time communication between clients and the server. When a user types, the full updated document is emitted to the server via a `code-change` event. The server updates its in-memory room state and broadcasts the new content to all other connected clients in the same room via `socket.to(roomId).emit()` — ensuring the sender never receives an echo of their own changes.
-
-### Live User Presence
-The server tracks which room each socket belongs to using a `socketRooms` Map. On every `join` and `disconnect` event, the server recalculates the room's active user count using Socket.io's built-in room adapter and broadcasts the updated count to all members. This powers the live "N online" indicator visible in the editor toolbar.
-
-### Language Sync
-Language selection is a first-class synchronized state. When any user changes the language via the toolbar dropdown, a `language-change` event is emitted to the server and broadcast to all room members — ensuring syntax highlighting stays consistent across all open instances of the same room.
-
----
+1. A user signs up or logs in.
+2. The user creates a new room or opens a past room.
+3. SyncCode creates a default `main.js` file for each new room.
+4. The user can create folders and files inside the room.
+5. Each file opens in Monaco Editor.
+6. Code edits sync live to other users in the same room and file.
+7. Files are saved in MongoDB and survive server restarts.
 
 ## Tech Stack
 
-### Backend
-| Component | Technology |
-|---|---|
-| Runtime | Node.js |
-| Framework | Express.js |
-| Real-time | Socket.io |
-| CORS | cors middleware |
-| State | In-memory Map (per room) |
-| Deployment | Render |
-
 ### Frontend
-| Component | Technology |
+
+| Area | Technology |
 |---|---|
-| Framework | React 18 |
+| Framework | React |
 | Build Tool | Vite |
-| Editor | Monaco Editor (@monaco-editor/react) |
-| Real-time | socket.io-client |
-| Routing | window.history.pushState (no router dependency) |
-| Styling | Inline styles (no CSS framework dependency) |
+| Editor | Monaco Editor |
+| Real-time Client | socket.io-client |
+| Auth UI | JWT auth, Google OAuth package |
 | Deployment | Vercel |
 
----
+### Backend
+
+| Area | Technology |
+|---|---|
+| Runtime | Node.js |
+| API Framework | Express |
+| Real-time Server | Socket.IO |
+| Database | MongoDB Atlas |
+| ODM | Mongoose |
+| Auth | JWT, bcryptjs, Google token verification |
+| Logging | Winston |
+| Deployment | Render |
+
+## Architecture
+
+```text
+React + Monaco Editor
+        |
+        | REST API: auth, rooms, folders, files
+        | Socket.IO: room/file editing events
+        v
+Node.js + Express + Socket.IO
+        |
+        | Mongoose models
+        v
+MongoDB Atlas
+```
+
+### Core Data Models
+
+- **User**: username, password hash, optional Google profile, auth provider
+- **Room**: room ID, owner, participants, last opened time
+- **Folder**: room ID, folder name, parent folder, owner
+- **CodeFile**: room ID, folder, filename, language, code, version, edit history
+- **Document**: legacy compatibility model for older single-document rooms
 
 ## Project Structure
 
-```
+```text
 synccode/
-|
-+-- server/
-|   +-- server.js          # Express + Socket.io server, room state, all socket events
-|   +-- package.json
-|   +-- node_modules/
-|
-+-- client/
-|   +-- src/
-|   |   +-- App.jsx         # Home screen: create/join room, URL-based routing
-|   |   +-- Editor.jsx      # Monaco editor, socket connection, real-time sync logic
-|   |   +-- main.jsx        # React root mount
-|   |   +-- index.css       # Global reset
-|   +-- public/
-|   +-- index.html
-|   +-- vite.config.js
-|   +-- vercel.json         # SPA rewrite rule for Vercel routing
-|   +-- package.json
-|   +-- node_modules/
-|
-+-- .gitignore
-+-- README.md
+├── client/
+│   ├── src/
+│   │   ├── App.jsx          # Auth, room creation, past rooms
+│   │   ├── Editor.jsx       # Monaco editor, folders/files, sockets
+│   │   ├── main.jsx         # React root and Google provider
+│   │   └── index.css
+│   ├── package.json
+│   └── vercel.json
+│
+├── server/
+│   ├── middleware/
+│   │   └── auth.js          # JWT and Socket.IO authentication
+│   ├── models/
+│   │   ├── CodeFile.js
+│   │   ├── Document.js
+│   │   ├── Folder.js
+│   │   ├── Room.js
+│   │   └── User.js
+│   ├── utils/
+│   │   └── logger.js        # Winston logger
+│   ├── server.js            # Express API and Socket.IO server
+│   └── package.json
+│
+└── README.md
 ```
 
----
+## Getting Started
 
-## Prerequisites
+### Prerequisites
 
-- Node.js 18 or higher
-- npm 9 or higher
+- Node.js 20 or newer
+- npm
+- MongoDB Atlas cluster
 
----
-
-## Installation
-
-### Backend Setup
+### 1. Clone the Repository
 
 ```bash
-cd synccode/server
+git clone https://github.com/Shubhidwivedii/synccode.git
+cd synccode
+```
+
+### 2. Install Dependencies
+
+Backend:
+
+```bash
+cd server
 npm install
 ```
 
-### Frontend Setup
+Frontend:
 
 ```bash
-cd synccode/client
+cd ../client
 npm install
 ```
 
----
+### 3. Configure Environment Variables
 
-## Running the Application
+Create `server/.env`:
 
-Both the backend server and the frontend dev server must be running simultaneously in separate terminals.
+```env
+MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@cluster-url/synccode?retryWrites=true&w=majority
+JWT_SECRET=replace-with-a-long-random-secret
+GOOGLE_CLIENT_ID=optional-google-client-id
+PORT=3001
+```
 
-### Start the Backend
+For local frontend development, create `client/.env` if needed:
+
+```env
+VITE_SERVER_URL=http://127.0.0.1:3001
+VITE_GOOGLE_CLIENT_ID=optional-google-client-id
+```
+
+### 4. Run Locally
+
+Start the backend:
 
 ```bash
-cd synccode/server
+cd server
 node server.js
 ```
 
-The backend will be available at `http://localhost:3001`.
-
-### Start the Frontend
+Start the frontend in another terminal:
 
 ```bash
-cd synccode/client
+cd client
 npm run dev
 ```
 
-The frontend dev server will start at `http://localhost:5173`.
+Open the Vite URL, usually:
 
-Open `http://localhost:5173` in your browser, click **Create New Room**, and share the URL with a collaborator to start editing together.
+```text
+http://127.0.0.1:5173
+```
 
----
+## API Overview
 
-## API & Socket Events
-
-### REST
+### Auth
 
 | Method | Route | Description |
 |---|---|---|
-| GET | `/` | Health check — returns `"SyncCode server is running"` |
+| POST | `/api/auth/register` | Create account with username/password |
+| POST | `/api/auth/login` | Log in with username/password |
+| POST | `/api/auth/google` | Log in with Google credential |
+| GET | `/api/auth/me` | Get current authenticated user |
 
-### Socket Events (Client → Server)
+### Rooms and Files
 
-| Event | Payload | Description |
+| Method | Route | Description |
 |---|---|---|
-| `join-room` | `roomId: string` | Join a room; server responds with current document state |
-| `code-change` | `{ roomId, code }` | Broadcast updated code to all other room members |
-| `language-change` | `{ roomId, language }` | Sync language selection across all room members |
+| GET | `/api/health` | Check server and database health |
+| GET | `/api/rooms` | List past rooms for current user |
+| POST | `/api/rooms` | Create or reopen a room |
+| GET | `/api/rooms/:roomId/tree` | Get folders and files for a room |
+| POST | `/api/rooms/:roomId/folders` | Create a folder |
+| POST | `/api/rooms/:roomId/files` | Create a file |
+| PUT | `/api/rooms/:roomId/files/:fileId` | Save file contents |
 
-### Socket Events (Server → Client)
+## Socket Events
 
-| Event | Payload | Description |
+| Event | Direction | Description |
 |---|---|---|
-| `load-document` | `{ code, language }` | Sent on join; delivers current room state to new member |
-| `code-update` | `code: string` | Received when another user changes the code |
-| `language-update` | `language: string` | Received when another user changes the language |
-| `user-count` | `count: number` | Sent to all room members on join or disconnect |
+| `join-room` | Client to Server | Join a collaborative room |
+| `join-file` | Client to Server | Join a file-specific collaboration channel |
+| `operation` | Both | Send or receive insert/delete operations |
+| `language-change` | Client to Server | Sync file language changes |
+| `load-document` | Server to Client | Load file code, language, and version |
+| `room-tree` | Server to Client | Load folders and files |
+| `user-count` | Server to Client | Update online user count |
+| `room-error` | Server to Client | Show room/editor errors |
 
----
+## Deployment
 
-## Supported Languages
+### Backend on Render
 
-SyncCode supports syntax highlighting for the following languages via Monaco Editor:
+Set these environment variables:
 
-| Language | Identifier |
-|---|---|
-| JavaScript | `javascript` |
-| Python | `python` |
-| Java | `java` |
-| C++ | `cpp` |
-| TypeScript | `typescript` |
-| HTML | `html` |
-| CSS | `css` |
-| Rust | `rust` |
+```env
+MONGODB_URI=your-mongodb-atlas-uri
+JWT_SECRET=your-production-jwt-secret
+GOOGLE_CLIENT_ID=optional-google-client-id
+```
 
----
+Build command:
 
-## Known Limitations
+```bash
+npm install
+```
 
-**In-memory state only.** Room state is stored in the server's memory. If the server restarts or the free-tier instance spins down due to inactivity, all active room content is lost. There is no persistence layer in the current version.
+Start command:
 
-**No conflict resolution.** The current sync model is last-write-wins — the most recently received `code-change` payload becomes the document state. Simultaneous edits from two users at the exact same position can result in one user's change being overwritten. A full Operational Transformation or CRDT implementation is planned.
+```bash
+node server.js
+```
 
-**No authentication.** Rooms are open to anyone with the link. There is no access control, password protection, or user identity in the current version.
+MongoDB Atlas must allow Render to connect. For quick setup, add this in Atlas Network Access:
 
-**Single server instance.** The in-memory room state is not shared across multiple server processes. Horizontal scaling would require replacing the Map with a shared store such as Redis pub/sub.
+```text
+0.0.0.0/0
+```
 
-**Free tier cold starts.** The Render free tier spins down inactive services. The first request after inactivity may take 30–60 seconds while the server wakes up.
+### Frontend on Vercel
 
----
+Set:
+
+```env
+VITE_SERVER_URL=https://your-render-backend-url
+VITE_GOOGLE_CLIENT_ID=optional-google-client-id
+```
+
+The included `vercel.json` rewrites all routes to `index.html`, so shared room links like `/room/abc123` work after refresh.
+
+## Resume Bullets
+
+- Built a real-time collaborative code editor with React, Monaco Editor, Socket.IO, Node.js, and MongoDB.
+- Implemented JWT authentication, user-specific room history, and persistent multi-file workspaces with folders.
+- Designed room/file-level collaboration channels with live user presence and synchronized editor state.
+- Added production logging with Winston and deployed the frontend/backend using Vercel and Render.
+- Debugged cloud deployment issues involving environment variables, MongoDB Atlas networking, and backend health checks.
 
 ## Roadmap
 
-The following features are planned for future versions:
+- File rename and delete
+- Folder nesting UI
+- Cursor presence and remote selections
+- In-room chat
+- Code execution sandbox
+- Better conflict resolution with CRDT or full Operational Transformation
+- Role-based room permissions
 
-- **User authentication** — JWT-based login so users have persistent identities across sessions
-- **Document persistence** — MongoDB integration to save room content; documents survive server restarts and are accessible by room ID
-- **Room history** — each authenticated user can view a list of rooms they previously created or joined
-- **Conflict resolution** — Operational Transformation implementation to correctly merge simultaneous edits at the same cursor position
-- **Cursor presence** — see other users' cursor positions and selections highlighted in real time
-- **Chat panel** — in-room text chat alongside the editor for communication without switching tools
-- **Code execution** — run code directly in the browser via a sandboxed execution API
+## Status
+
+SyncCode is actively evolving as a placement-ready full-stack project. The current version demonstrates real-time systems, authentication, database modeling, deployment, and practical production debugging.
 
 ---
 
-*SyncCode — write code together, instantly.*
+**SyncCode - code together, from anywhere.**
