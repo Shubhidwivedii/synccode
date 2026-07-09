@@ -23,7 +23,9 @@ const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
 });
 
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.set('bufferCommands', false);
+
+mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
   .then(() => logger.info('Connected to MongoDB'))
   .catch((err) => logger.error('MongoDB connection error', { error: err.message }));
 
@@ -33,6 +35,20 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 function sanitizeUsername(username = '') {
   return username.trim().toLowerCase();
+}
+
+function isDatabaseReady() {
+  return mongoose.connection.readyState === 1;
+}
+
+function requireDatabase(req, res, next) {
+  if (!isDatabaseReady()) {
+    return res.status(503).json({
+      error: 'Database unavailable. Check MONGODB_URI and MongoDB Atlas network access.',
+    });
+  }
+
+  next();
 }
 
 function serializeUser(user) {
@@ -133,6 +149,17 @@ async function getRoomTree(roomId, userId) {
 }
 
 app.get('/', (req, res) => res.send('SyncCode server is running'));
+
+app.get('/api/health', (req, res) => {
+  res.json({
+    ok: true,
+    database: isDatabaseReady() ? 'connected' : 'disconnected',
+  });
+});
+
+app.use('/api/auth', requireDatabase);
+app.use('/api/rooms', requireDatabase);
+app.use('/api/document', requireDatabase);
 
 app.post('/api/auth/register', async (req, res) => {
   try {
